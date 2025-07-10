@@ -6,9 +6,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/$
 export default function PDFViewer({
   fileUrl,
   manualRedactions = {},
-  onAddRedaction,
+  onAddRedaction = null,
   currentPage = 1,
-  setTotalPages,
+  setTotalPages = () => {},
   width = 600,
 }) {
   const [pageSize, setPageSize] = useState({});
@@ -17,7 +17,7 @@ export default function PDFViewer({
   const [currentRect, setCurrentRect] = useState(null);
 
   const onDocumentLoadSuccess = ({ numPages }) => {
-    setTotalPages?.(numPages);
+    setTotalPages(numPages);
   };
 
   const onPageRenderSuccess = (page) => {
@@ -26,7 +26,7 @@ export default function PDFViewer({
   };
 
   const handleMouseDown = (e) => {
-    if (e.button !== 0) return;
+    if (!onAddRedaction || e.button !== 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -49,16 +49,48 @@ export default function PDFViewer({
   };
 
   const handleMouseUp = () => {
-    if (selecting && currentRect) {
-      onAddRedaction?.(fileUrl, currentPage, currentRect);
+    if (!onAddRedaction || !selecting || !currentRect || !pageSize.width || !pageSize.height) {
+      setSelecting(false);
+      return;
     }
+const renderedWidth = width;
+    const renderedHeight = (pageSize.height / pageSize.width) * width;
+
+    const scaleX = pageSize.width / renderedWidth;
+const scaleY = pageSize.height / renderedHeight;
+
+    const screenYTop = currentRect.top;
+    const screenYBottom = currentRect.top + currentRect.height;
+
+    const pdfX0 = currentRect.left * scaleX;
+    const pdfX1 = (currentRect.left + currentRect.width) * scaleX;
+
+    const pdfY0 = pageSize.height - (screenYBottom * scaleY);
+    const pdfY1 = pageSize.height - (screenYTop * scaleY);
+
+    const adjustedRect = {
+      x0: pdfX0,
+      y0: pdfY0,
+      x1: pdfX1,
+      y1: pdfY1,
+      left: currentRect.left,
+      top: currentRect.top,
+      width: currentRect.width,
+      height: currentRect.height,
+    };
+
+    onAddRedaction(fileUrl, currentPage, adjustedRect);
+    console.log("Screen box:", currentRect);
+    console.log("PDF box:", adjustedRect);
+
     setSelecting(false);
     setStartPoint(null);
     setCurrentRect(null);
   };
 
   const renderOverlays = () => {
-    const rects = manualRedactions[currentPage] || [];
+    const rects = manualRedactions?.[currentPage] || [];
+
     return (
       <>
         {rects.map((r, i) => (
@@ -94,11 +126,16 @@ export default function PDFViewer({
     );
   };
 
+  const overlayHeight =
+    pageSize.width && pageSize.height
+      ? (pageSize.height / pageSize.width) * width
+      : 0;
+
   return (
     <div>
       <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess}>
         <div
-          style={{ position: "relative", cursor: "crosshair" }}
+          style={{ position: "relative", cursor: onAddRedaction ? "crosshair" : "default" }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -115,8 +152,8 @@ export default function PDFViewer({
               position: "absolute",
               top: 0,
               left: 0,
-              width: width,
-              height: pageSize.height || 0,
+              width,
+              height: overlayHeight,
             }}
           >
             {renderOverlays()}

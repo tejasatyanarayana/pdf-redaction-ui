@@ -7,10 +7,13 @@ export const useRedaction = () => useContext(RedactionContext);
 export const RedactionProvider = ({ children }) => {
   const [files, setFiles] = useState([]); // [{ file, url }]
   const [redactionConfig, setRedactionConfig] = useState({
-    placeholderText: "[REDACTED]",
+    keywords: "",
+    page_range: "",
+    remove_graphics: false,
   });
+
   const [manualRedactions, setManualRedactions] = useState({});
-  // { fileUrl: { pageNum: [{ x, y, width, height }] } }
+  // { fileUrl: { pageNum: [{ x0, y0, x1, y1, left, top, width, height }] } }
 
   const addManualRedaction = (fileUrl, pageNum, rect) => {
     setManualRedactions((prev) => {
