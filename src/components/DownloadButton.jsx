@@ -8,7 +8,8 @@ export default function DownloadButton() {
     const filename = file.name;
 
     try {
-      const response = await fetch(`http://localhost:8000/download/${filename}`);
+      const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+      const response = await fetch(`${backendBaseUrl}/${filename}`);
       if (!response.ok) {
         throw new Error("File not found or server error");
       }

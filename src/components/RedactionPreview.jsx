@@ -23,7 +23,6 @@ export default function RedactionPreview() {
   }, [redactedBlobUrl]);
 
   if (!files || files.length === 0) return null;
-
   const currentFile = files[currentFileIndex];
   if (!currentFile) return null;
 
@@ -31,7 +30,7 @@ export default function RedactionPreview() {
     const filename = currentFile?.file?.name;
     const boxesByPage = manualRedactions[currentFile.url] || {};
     const manual_boxes = [];
-
+   
     for (const [pageStr, rects] of Object.entries(boxesByPage)) {
       const page = parseInt(pageStr, 10) - 1;
       rects.forEach((r) => {
@@ -54,7 +53,9 @@ export default function RedactionPreview() {
     };
 
     try {
-      const res = await fetch("http://localhost:8000/redact/manual", {
+      const backendBaseUrl = process.env.REACT_APP_BACKEND_URL  || "http://localhost:8000";
+      console.log("Backend URL3:", process.env.REACT_APP_BACKEND_URL);
+      const res = await fetch(`${backendBaseUrl}/redact/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -66,8 +67,8 @@ export default function RedactionPreview() {
 
       setRedactedFilename(redactedName);
       setRedactionComplete(true);
-
-      const blobRes = await fetch(`http://localhost:8000/download/${redactedName}`);
+      console.log("Backend URL2:", process.env.REACT_APP_BACKEND_URL);
+      const blobRes = await fetch(`${backendBaseUrl}/download/${redactedName}`);
       if (!blobRes.ok) throw new Error("Blob fetch failed");
 
       const blob = await blobRes.blob();
@@ -81,7 +82,9 @@ export default function RedactionPreview() {
 
   const handleDownload = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/download/${redactedFilename}`);
+      const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+      console.log("Backend URL2:", process.env.REACT_APP_BACKEND_URL);
+      const res = await fetch(`${backendBaseUrl}/download/${redactedFilename}`);
       if (!res.ok) throw new Error("Download failed");
 
       const blob = await res.blob();

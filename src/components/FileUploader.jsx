@@ -45,12 +45,15 @@ const convertPdfToA4 = async (file) => {
 };
  const uploadFileToBackend = async (file) => {
   try {
+   
     const resizedPdfBlob = await convertPdfToA4(file);
     const formData = new FormData();
     const fileResized = new File([resizedPdfBlob], file.name, { type: "application/pdf" });
     formData.append("file", fileResized, file.filename);
-
-    const res = await fetch("http://localhost:8000/upload", {
+    const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+    console.log("Backend URL:", process.env.REACT_APP_BACKEND_URL);
+  
+    const res = await fetch(`${backendBaseUrl}/upload`, {
       method: "POST",
       body: formData,
     });
@@ -72,6 +75,7 @@ const convertPdfToA4 = async (file) => {
 };
 
   const onChange = async (e) => {
+
     const selectedFiles = Array.from(e.target.files);
     const uploadedFileEntries = [];
 
