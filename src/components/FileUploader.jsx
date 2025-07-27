@@ -1,10 +1,10 @@
-import React from "react";
 import { useRedaction } from "../context/RedactionContext";
 import { PDFDocument, PageSizes } from "pdf-lib";
-
+import React, { useState } from "react";
 
 export default function FileUploader() {
   const { setFiles } = useRedaction();
+  const [isUploading, setIsUploading] = useState(false);
 
 
 const convertPdfToA4 = async (file) => {
@@ -73,35 +73,43 @@ const convertPdfToA4 = async (file) => {
     return null;
   }
 };
+const onChange = async (e) => {
+  setIsUploading(true);
+  const selectedFiles = Array.from(e.target.files);
+  const uploadedFileEntries = [];
 
-  const onChange = async (e) => {
-
-    const selectedFiles = Array.from(e.target.files);
-    const uploadedFileEntries = [];
-
-    for (const file of selectedFiles) {
-      const uploadResult = await uploadFileToBackend(file);
-      if (uploadResult) {
-        uploadedFileEntries.push({
-        file: uploadResult.resizedFile, // use resized file
-        url: URL.createObjectURL(uploadResult.resizedFile), // show resized in preview // For local preview
-          backendPath: `uploads/${uploadResult.filename}`, // Optional: for future API reference
-        });
-      }
+  for (const file of selectedFiles) {
+    const uploadResult = await uploadFileToBackend(file);
+    if (uploadResult) {
+      uploadedFileEntries.push({
+        file: uploadResult.resizedFile,
+        url: URL.createObjectURL(uploadResult.resizedFile),
+        backendPath: `uploads/${uploadResult.filename}`,
+      });
     }
+  }
 
-    setFiles(uploadedFileEntries);
-  };
+  setFiles(uploadedFileEntries);
+  setIsUploading(false);
+};
 
-  return (
-    <div>
-      <h3>Upload PDF files</h3>
-      <input
-        type="file"
-        multiple
-        accept="application/pdf"
-        onChange={onChange}
-      />
-    </div>
-  );
+ return (
+  <div>
+    <h3>Upload PDF files</h3>
+    <input
+      type="file"
+      multiple
+      accept="application/pdf"
+      onChange={onChange}
+      disabled={isUploading}
+    />
+    
+    {isUploading && (
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="spinner" />
+        <span>Uploading and resizing...</span>
+      </div>
+    )}
+  </div>
+);
 }

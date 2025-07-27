@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import PDFViewer from "./PDFViewer";
 import { useRedaction } from "../context/RedactionContext";
-
+import './RedactionPreview.css';
 export default function RedactionPreview() {
   const { redactionConfig, files, manualRedactions, addManualRedaction } = useRedaction();
 
@@ -13,6 +13,8 @@ export default function RedactionPreview() {
   const [redactedFiles, setRedactedFiles] = useState([]);
   const [redactingAll, setRedactingAll] = useState(false);
   const [redactedBlobUrl, setRedactedBlobUrl] = useState(null);
+  const [isRedacting, setIsRedacting] = useState(false);
+
 
   useEffect(() => {
     return () => {
@@ -26,11 +28,13 @@ export default function RedactionPreview() {
   const currentFile = files[currentFileIndex];
   if (!currentFile) return null;
 
-  const handleRedact = async () => {
+const handleRedact = async () => {
+  setIsRedacting(true);
+  try {
     const filename = currentFile?.file?.name;
     const boxesByPage = manualRedactions[currentFile.url] || {};
     const manual_boxes = [];
-   
+
     for (const [pageStr, rects] of Object.entries(boxesByPage)) {
       const page = parseInt(pageStr, 10) - 1;
       rects.forEach((r) => {
@@ -52,33 +56,34 @@ export default function RedactionPreview() {
       manual_boxes,
     };
 
-    try {
-      const backendBaseUrl = process.env.REACT_APP_BACKEND_URL  || "http://localhost:8000";
-      console.log("Backend URL3:", process.env.REACT_APP_BACKEND_URL);
-      const res = await fetch(`${backendBaseUrl}/redact/manual`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+    const res = await fetch(`${backendBaseUrl}/redact/manual`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      if (!res.ok) throw new Error("Redaction failed");
-      const result = await res.json();
-      const redactedName = result.redacted_file?.split("redacted_")[1] || filename;
+    if (!res.ok) throw new Error("Redaction failed");
+    const result = await res.json();
+    const redactedName = result.redacted_file?.split("redacted_")[1] || filename;
 
-      setRedactedFilename(redactedName);
-      setRedactionComplete(true);
-      console.log("Backend URL2:", process.env.REACT_APP_BACKEND_URL);
-      const blobRes = await fetch(`${backendBaseUrl}/download/${redactedName}`);
-      if (!blobRes.ok) throw new Error("Blob fetch failed");
+    setRedactedFilename(redactedName);
+    setRedactionComplete(true);
 
-      const blob = await blobRes.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      setRedactedBlobUrl(blobUrl);
-    } catch (err) {
-      console.error("Error during redaction:", err);
-      alert("Redaction failed.");
-    }
-  };
+    const blobRes = await fetch(`${backendBaseUrl}/download/${redactedName}`);
+    if (!blobRes.ok) throw new Error("Blob fetch failed");
+
+    const blob = await blobRes.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    setRedactedBlobUrl(blobUrl);
+  } catch (err) {
+    console.error("Error during redaction:", err);
+    alert("Redaction failed.");
+  } finally {
+    setIsRedacting(false);  // always stop spinner
+  }
+};
+
 
   const handleDownload = async () => {
     try {
@@ -192,97 +197,100 @@ export default function RedactionPreview() {
   //   }
   // };
 
-  return (
-    <div style={{ marginTop: 30 }}>
-      <h3>Redaction Preview</h3>
+ return (
+  <div style={{ marginTop: 30 }}>
+    <h3>Redaction Preview</h3>
 
-      {/* File Navigation */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
-        <button onClick={() => handleFileChange(-1)} disabled={currentFileIndex === 0}>
-          ⬅ Prev File
-        </button>
-        <span>
-          Viewing file: <strong>{currentFile?.file?.name}</strong> ({currentFileIndex + 1} of {files.length})
-        </span>
-        <button onClick={() => handleFileChange(1)} disabled={currentFileIndex === files.length - 1}>
-          Next File ➡
-        </button>
-      </div>
-
-      {/* Page Navigation */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
-        <button onClick={() => handlePageChange(-1)} disabled={currentPage === 1}>
-          ⬅ Prev Page
-        </button>
-        <span>
-          Page {currentPage} of {totalPages}
-        </span>
-        <button onClick={() => handlePageChange(1)} disabled={currentPage === totalPages}>
-          Next Page ➡
-        </button>
-      </div>
-
-      {/* Side-by-side PDFs */}
-      <div style={{ display: "flex", gap: 40 }}>
-        <div style={{ flex: 1 }}>
-          <h5>Original</h5>
-        <PDFViewer
-  fileUrl={currentFile.url}
-  manualRedactions={manualRedactions[currentFile.url] || {}} // ← Render existing boxes
-  onAddRedaction={addManualRedaction}                      // ← Enable drawing
-  currentPage={currentPage}
-  setTotalPages={setTotalPages}
-/>
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <h5>Redacted</h5>
-          {redactionComplete && redactedBlobUrl ? (
-            <PDFViewer
-              fileUrl={redactedBlobUrl}
-              manualRedactions={{}}
-              currentPage={currentPage}
-              setTotalPages={() => {}}
-            />
-          ) : (
-            <div
-              style={{
-                width: "100%",
-                height: (800 / 1.414),
-                backgroundColor: "#f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#999",
-                border: "1px dashed #ccc",
-              }}
-            >
-              <span>Redacted output will appear here</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleRedact}>🚨 Redact</button>
-        {redactionComplete && redactedFilename && (
-          <button onClick={handleDownload} style={{ marginLeft: 20 }}>
-            ⬇️ Download Redacted File
-          </button>
-        )}
-      </div>
-
-      {/* <div style={{ marginTop: 30 }}>
-        <button onClick={handleRedactAll} disabled={redactingAll}>
-          🔴 Redact All Files
-        </button>
-
-        {redactedFiles.length > 0 && (
-          <button onClick={handleDownloadAll} style={{ marginLeft: 20 }}>
-            ⬇️ Download All Redacted Files
-          </button>
-        )}
-      </div> */}
+    {/* File Navigation */}
+    <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
+      <button onClick={() => handleFileChange(-1)} disabled={currentFileIndex === 0}>
+        ⬅ Prev File
+      </button>
+      <span>
+        Viewing file: <strong>{currentFile?.file?.name}</strong> ({currentFileIndex + 1} of {files.length})
+      </span>
+      <button onClick={() => handleFileChange(1)} disabled={currentFileIndex === files.length - 1}>
+        Next File ➡
+      </button>
     </div>
-  );
+
+    {/* Page Navigation */}
+    <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+      <button onClick={() => handlePageChange(-1)} disabled={currentPage === 1}>
+        ⬅ Prev Page
+      </button>
+      <span>
+        Page {currentPage} of {totalPages}
+      </span>
+      <button onClick={() => handlePageChange(1)} disabled={currentPage === totalPages}>
+        Next Page ➡
+      </button>
+    </div>
+
+    {/* Side-by-side PDFs */}
+    <div style={{ display: "flex", gap: 40 }}>
+      <div style={{ flex: 1 }}>
+        <h5>Original</h5>
+        <PDFViewer
+          fileUrl={currentFile.url}
+          manualRedactions={manualRedactions[currentFile.url] || {}}
+          onAddRedaction={addManualRedaction}
+          currentPage={currentPage}
+          setTotalPages={setTotalPages}
+        />
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <h5>Redacted</h5>
+        {isRedacting ? (
+          <div
+            style={{
+              width: "100%",
+              height: 800 / 1.414,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div className="spinner" />
+          </div>
+        ) : redactionComplete && redactedBlobUrl ? (
+          <PDFViewer
+            fileUrl={redactedBlobUrl}
+            manualRedactions={{}}
+            currentPage={currentPage}
+            setTotalPages={() => {}}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: 800 / 1.414,
+              backgroundColor: "#f0f0f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#999",
+              border: "1px dashed #ccc",
+            }}
+          >
+            <span>Redacted output will appear here</span>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div style={{ marginTop: 20 }}>
+      <button onClick={handleRedact} disabled={isRedacting}>
+        {isRedacting ? "⏳ Redacting..." : "🚨 Redact"}
+      </button>
+      {redactionComplete && redactedFilename && (
+        <button onClick={handleDownload} style={{ marginLeft: 20 }}>
+          ⬇️ Download Redacted File
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 }
