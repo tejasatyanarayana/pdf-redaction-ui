@@ -1,31 +1,75 @@
 import React from "react";
 import { useRedaction } from "../context/RedactionContext";
+import { PDFDocument, PageSizes } from "pdf-lib";
+
 
 export default function FileUploader() {
   const { setFiles } = useRedaction();
 
-  const uploadFileToBackend = async (file) => {
+
+const convertPdfToA4 = async (file) => {
+  const originalBytes = await file.arrayBuffer();
+  const originalPdf = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+  const a4Pdf = await PDFDocument.create();
+
+  const a4Width = PageSizes.A4[0]; // 595.28
+  const a4Height = PageSizes.A4[1]; // 841.89
+
+  const totalPages = originalPdf.getPageCount();
+
+  for (let i = 0; i < totalPages; i++) {
+    const originalPage = originalPdf.getPage(i);
+    const { width, height } = originalPage.getSize();
+
+    // Embed the page from the original PDF
+    const embeddedPage = await a4Pdf.embedPage(originalPage);
+
+    const scale = Math.min(a4Width / width, a4Height / height);
+
+    const x = (a4Width - width * scale) / 2;
+    const y = (a4Height - height * scale) / 2;
+
+    const a4Page = a4Pdf.addPage([a4Width, a4Height]);
+
+    // Draw the embedded page
+    a4Page.drawPage(embeddedPage, {
+      x,
+      y,
+      xScale: scale,
+      yScale: scale,
+    });
+  }
+
+  const resizedPdfBytes = await a4Pdf.save();
+  return new Blob([resizedPdfBytes], { type: "application/pdf" });
+};
+ const uploadFileToBackend = async (file) => {
+  try {
+    const resizedPdfBlob = await convertPdfToA4(file);
     const formData = new FormData();
-    formData.append("file", file);
+    const fileResized = new File([resizedPdfBlob], file.name, { type: "application/pdf" });
+    formData.append("file", fileResized, file.filename);
 
-    try {
-      const res = await fetch("http://localhost:8000/upload", {
-        method: "POST",
-        body: formData,
-      });
+    const res = await fetch("http://localhost:8000/upload", {
+      method: "POST",
+      body: formData,
+    });
 
-      if (!res.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const data = await res.json();
-      console.log("Uploaded:", data);
-      return data;
-    } catch (err) {
-      console.error("Upload error:", err);
-      return null;
+    if (!res.ok) {
+      throw new Error("Upload failed");
     }
-  };
+
+    const data = await res.json();
+    console.log("Uploaded:", data);
+        return {
+      ...data,
+      resizedFile: fileResized,
+    };
+  } catch (err) {
+    console.error("Upload error:", err);
+    return null;
+  }
+};
 
   const onChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -35,8 +79,8 @@ export default function FileUploader() {
       const uploadResult = await uploadFileToBackend(file);
       if (uploadResult) {
         uploadedFileEntries.push({
-          file,
-          url: URL.createObjectURL(file), // For local preview
+        file: uploadResult.resizedFile, // use resized file
+        url: URL.createObjectURL(uploadResult.resizedFile), // show resized in preview // For local preview
           backendPath: `uploads/${uploadResult.filename}`, // Optional: for future API reference
         });
       }
